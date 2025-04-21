@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text,LargeBinary,JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -17,8 +17,18 @@ class Message(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(Text)
+    content = Column(JSON)
     direction = Column(String)  # "incoming" or "outgoing"
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User", back_populates="messages")
+
+
+
+class DeviceDocument(Base):
+    __tablename__ = "device_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Integer, nullable=False, index=True)
+    device_pdf = Column(String, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())

@@ -1,5 +1,5 @@
 # Pydantic schemas
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -37,13 +37,20 @@ class WhatsAppTextMessage(BaseModel):
     body: str
 
 class WhatsAppMessage(BaseModel):
-    from_: str
+    from_: str = Field(alias="from")
     text: Optional[WhatsAppTextMessage]
-    
-    class Config:
-        fields = {
-            'from_': 'from'
-        }
-
 class WhatsAppWebhook(BaseModel):
     messages: List[WhatsAppMessage]
+
+# for adding document
+class DeviceDocumentResponse(BaseModel):
+    id: int
+    device_id: int
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+class QuestionRequest(BaseModel):
+    question: str
+    device_id: int        

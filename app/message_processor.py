@@ -5,7 +5,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from fastapi.concurrency import run_in_threadpool
 from twilio.rest import Client
 from .models import User, Message
-from .gemini import GeminiLLMClient  # Import the Gemini LLM client
+# from .gemini import GeminiLLMClient  
+from .generation import answer_question_with_rag
+# # Import the Gemini LLM client
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +21,85 @@ twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 # WhatsApp message character limit
 WHATSAPP_MAX_LENGTH = 1500  # Using 1500 instead of 1600 for safety
 
-async def process_whatsapp_message(sender: str, message_text: str, db: Session) -> str:
-    """
-    Processes an incoming WhatsApp message:
-      - Finds or creates a user by phone number.
-      - Saves the incoming message.
-      - Uses GeminiLLMClient to get a plain-text response.
-      - Saves the outgoing message.
-      - Sends the response back via WhatsApp, handling long messages.
+# async def process_whatsapp_message(sender: str, message_text: str, db: Session) -> str:
+#     """
+#     Processes an incoming WhatsApp message:
+#       - Finds or creates a user by phone number.
+#       - Saves the incoming message.
+#       - Uses GeminiLLMClient to get a plain-text response.
+#       - Saves the outgoing message.
+#       - Sends the response back via WhatsApp, handling long messages.
     
-    Returns the Gemini API response text.
-    """
+#     Returns the Gemini API response text.
+#     """
+#     try:
+#         logger.info(f"Processing message from {sender}: {message_text}")
+
+#         # Get or create the user by phone number.
+#         user = db.query(User).filter(User.phone == sender).first()
+#         if not user:
+#             user = User(phone=sender)
+#             db.add(user)
+#             db.commit()
+#             db.refresh(user)
+
+#         # Save the incoming message.
+#         incoming_message = Message(
+#             user_id=user.id,
+#             content=message_text,
+#             direction="incoming"
+#         )
+#         db.add(incoming_message)
+#         db.commit()
+#         db.refresh(incoming_message)
+
+#         # Optionally, retrieve chat history for context
+#         # This could be expanded to get the last few messages
+#         chat_history = []
+
+#         # Get response from GeminiLLMClient (wrapped in threadpool to avoid blocking)
+#         gemini_client = GeminiLLMClients
+#         response_text = await run_in_threadpool(
+#             gemini_client.generate_response, 
+#             message_text, 
+#             chat_history,
+#             max_length=700  # Limit Gemini response length to avoid WhatsApp issues
+#         )
+
+#         # Save the outgoing message.
+#         outgoing_message = Message(
+#             user_id=user.id,
+#             content=response_text,
+#             direction="outgoing"
+#         )
+#         db.add(outgoing_message)
+#         db.commit()
+#         db.refresh(outgoing_message)
+
+#         # Send the response back via WhatsApp, handling long messages
+#         await run_in_threadpool(
+#             send_whatsapp_message, 
+#             to_number=sender,
+#             message_body=response_text
+#         )
+
+#         logger.info(f"Successfully processed message from {sender} and sent response")
+#         return response_text
+
+#     except SQLAlchemyError as db_err:
+#         logger.error(f"Database error: {str(db_err)}")
+#         db.rollback()
+#         error_msg = "Sorry, there was a problem processing your message."
+#         # Try to send error message to user
+#         await run_in_threadpool(send_whatsapp_message, sender, error_msg)
+#         return error_msg
+#     except Exception as e:
+#         logger.error(f"Error processing message: {str(e)}")
+#         error_msg = "Sorry, an unexpected error occurred."
+#         # Try to send error message to user
+#         await run_in_threadpool(send_whatsapp_message, sender, error_msg)
+#         return error_msg
+async def process_whatsapp_message(sender: str, message_text: str, db: Session) -> str:
     try:
         logger.info(f"Processing message from {sender}: {message_text}")
 
@@ -51,17 +121,16 @@ async def process_whatsapp_message(sender: str, message_text: str, db: Session) 
         db.commit()
         db.refresh(incoming_message)
 
-        # Optionally, retrieve chat history for context
-        # This could be expanded to get the last few messages
-        chat_history = []
+        # Retrieve context from Pinecone via RAG
+      
+         # or another identifier based on your system
 
-        # Get response from GeminiLLMClient (wrapped in threadpool to avoid blocking)
-        gemini_client = GeminiLLMClient()
+        # Call the RAG-based function in a threadpool
+        device_id=17
         response_text = await run_in_threadpool(
-            gemini_client.generate_response, 
-            message_text, 
-            chat_history,
-            max_length=700  # Limit Gemini response length to avoid WhatsApp issues
+            answer_question_with_rag,
+            message_text,
+            device_id
         )
 
         # Save the outgoing message.
@@ -74,9 +143,9 @@ async def process_whatsapp_message(sender: str, message_text: str, db: Session) 
         db.commit()
         db.refresh(outgoing_message)
 
-        # Send the response back via WhatsApp, handling long messages
+        # Send the response back via WhatsApp
         await run_in_threadpool(
-            send_whatsapp_message, 
+            send_whatsapp_message,
             to_number=sender,
             message_body=response_text
         )
@@ -88,15 +157,14 @@ async def process_whatsapp_message(sender: str, message_text: str, db: Session) 
         logger.error(f"Database error: {str(db_err)}")
         db.rollback()
         error_msg = "Sorry, there was a problem processing your message."
-        # Try to send error message to user
         await run_in_threadpool(send_whatsapp_message, sender, error_msg)
         return error_msg
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         error_msg = "Sorry, an unexpected error occurred."
-        # Try to send error message to user
         await run_in_threadpool(send_whatsapp_message, sender, error_msg)
         return error_msg
+
 
 def send_whatsapp_message(to_number: str, message_body: str):
     """
